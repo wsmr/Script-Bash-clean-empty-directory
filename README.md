@@ -7,7 +7,7 @@ A powerful and intelligent shell script that finds and removes empty directories
 ### Core Functionality
 - **Smart Empty Detection**: Identifies truly empty directories while ignoring specified file patterns
 - **Hidden File Awareness**: Properly handles hidden files like `.DS_Store`, `.nomedia`, `.Thumbs.db`
-- **Recursive Cleanup**: Continues cleaning until no more empty directories are found
+- **Recursive Cleanup**: Continues cleaning until no more empty directories are found (up to 10 iterations)
 - **Safety First**: Interactive confirmation before deletion with preview options
 - **Cross-Platform**: Works on macOS (M1/M2), Linux, and Unix-like systems
 
@@ -18,6 +18,8 @@ A powerful and intelligent shell script that finds and removes empty directories
 - **Comprehensive Logging**: Detailed logs with timestamps and operation history
 - **Colored Output**: Easy-to-read terminal output with color coding
 - **Statistics Tracking**: Monitor performance and results
+- **Force Mode**: Skip confirmation prompts for automated usage
+- **Quiet/Verbose Modes**: Control output verbosity
 
 ## 📋 Table of Contents
 
@@ -31,14 +33,14 @@ A powerful and intelligent shell script that finds and removes empty directories
 - [Safety Features](#safety-features)
 - [Troubleshooting](#troubleshooting)
 - [Advanced Usage](#advanced-usage)
-- [Future Enhancements](#future-enhancements)
+- [Logging](#logging)
 
 ## 🛠️ Installation
 
 ### Method 1: Direct Download
 ```bash
 # Download the script
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/clean_empty_dirs.sh
+curl -O https://raw.githubusercontent.com/wsmr/Script-Bash-clean-empty-directory/main/clean_empty_dirs.sh
 
 # Make it executable
 chmod +x clean_empty_dirs.sh
@@ -46,8 +48,8 @@ chmod +x clean_empty_dirs.sh
 
 ### Method 2: Clone Repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
-cd YOUR_REPO
+git clone https://github.com/wsmr/Script-Bash-clean-empty-directory.git
+cd Script-Bash-clean-empty-directory
 chmod +x clean_empty_dirs.sh
 ```
 
@@ -93,22 +95,22 @@ clean-dirs ~/Downloads
 | Option | Description | Example |
 |--------|-------------|---------|
 | `TARGET_DIR` | Directory to clean (default: current) | `~/Downloads` |
-| `-h, --help` | Show help message | `--help` |
+| `-h, --help` | Show help message and exit | `--help` |
 | `--dry-run` | Preview without deleting | `--dry-run ~/test` |
 
 ### Filtering Options
 | Option | Description | Example |
 |--------|-------------|---------|
-| `-i, --ignore PATTERNS` | Custom ignore patterns | `-i "*.tmp\|*.bak"` |
-| `-d, --depth DEPTH` | Maximum search depth | `-d 3` |
+| `-i, --ignore PATTERNS` | Custom ignore patterns (comma or pipe-separated) | `-i "*.tmp\|*.bak"` |
+| `-d, --depth DEPTH` | Maximum search depth (0 = unlimited) | `-d 3` |
 
 ### Behavior Options
 | Option | Description | Example |
 |--------|-------------|---------|
-| `-r, --recursive` | Keep cleaning until done | `--recursive` |
+| `-r, --recursive` | Keep cleaning until no empty dirs found | `--recursive` |
 | `-f, --force` | Skip confirmation prompt | `--force` |
 | `-q, --quiet` | Minimal output | `--quiet` |
-| `-v, --verbose` | Detailed output | `--verbose` |
+| `-v, --verbose` | Detailed output with directory listings | `--verbose` |
 
 ### Output Options
 | Option | Description | Example |
@@ -163,11 +165,23 @@ clean-dirs ~/Downloads
 ```
 **What it does:** Automatically deletes all empty directories found, repeating until none remain
 
-### Example 6: Quiet Mode with Logging
+### Example 6: Verbose Mode
 ```bash
-./clean_empty_dirs.sh --quiet ~/large_folder 2>&1 | grep "Summary"
+./clean_empty_dirs.sh -v ~/Documents
 ```
-**What it does:** Runs silently but shows only the final summary
+**What it does:** Shows detailed information about each directory being processed
+
+### Example 7: Quiet Mode with Custom Patterns
+```bash
+./clean_empty_dirs.sh -q -i "*.DS_Store,*.Thumbs.db" ~/Pictures
+```
+**What it does:** Runs silently with custom ignore patterns for image folders
+
+### Example 8: List Mode for Review
+```bash
+./clean_empty_dirs.sh ~/folder
+# When prompted, type "list" to see detailed information about each directory
+```
 
 ## ⚙️ Configuration
 
@@ -177,17 +191,22 @@ The script includes a configuration section at the top that you can modify:
 # Default ignore patterns
 DEFAULT_IGNORE_PATTERNS="*.DS_Store|*.nomedia|*.Thumbs.db|*.desktop.ini|*.~*"
 
-# Maximum iterations for recursive cleanup
-MAX_ITERATIONS=10
+# Maximum depth for directory traversal (0 = no limit)
+MAX_DEPTH=0
 
 # Safety mode (require confirmation)
 SAFETY_MODE=true
 
-# Enable colored output
-USE_COLORS=true
+# Recursive cleanup settings
+RECURSIVE_CLEANUP=true
+MAX_ITERATIONS=10
 
-# Enable logging by default
+# Logging settings
 ENABLE_LOGGING=true
+LOG_DIRECTORY=""  # Empty = same as target directory
+
+# Output settings
+USE_COLORS=true
 ```
 
 ### Common Ignore Patterns
@@ -233,8 +252,8 @@ Standard Unix commands (available on most systems):
 - `mktemp`
 
 ### Optional Dependencies
-- `tput` - For better color support
-- `stat` - For detailed file information (if available)
+- `tput` - For enhanced color support
+- `ls` - For detailed directory information
 
 ### Performance Considerations
 - **Memory Usage**: Minimal, suitable for systems with 512MB+ RAM
@@ -244,20 +263,21 @@ Standard Unix commands (available on most systems):
 ## 🔍 How It Works
 
 ### Detection Algorithm
-1. **Directory Traversal**: Uses `find` to locate all directories
-2. **Content Analysis**: Checks each directory for files
+1. **Directory Traversal**: Uses `find` to locate all directories within specified depth
+2. **Content Analysis**: Checks each directory for files using shell globbing
 3. **Pattern Matching**: Applies ignore patterns to determine "effective emptiness"
 4. **Safety Validation**: Confirms directories are still empty before deletion
 
 ### Empty Directory Criteria
 A directory is considered empty if it contains only:
 - No files at all, OR
-- Only files matching ignore patterns (e.g., `.DS_Store`)
+- Only files matching ignore patterns (e.g., `.DS_Store`, `.nomedia`)
 
 ### Processing Flow
 ```
-Start → Find Directories → Check Contents → Apply Patterns → 
-Confirm with User → Delete → Log Results → Repeat (if recursive)
+Start → Parse Arguments → Setup Logging → Find Directories → 
+Check Contents → Apply Patterns → Confirm with User → 
+Delete → Log Results → Repeat (if recursive) → Final Summary
 ```
 
 ### Example Scenarios
@@ -293,14 +313,20 @@ parent/
     └── grandchild/
         └── .DS_Store
 ```
-**Result**: ✅ All deleted (recursive cleanup)
+**Result**: ✅ All deleted (recursive cleanup removes parent after child)
 
 ## 🛡️ Safety Features
 
 ### Interactive Confirmation
 - **Preview Mode**: Shows what will be deleted before confirmation
 - **List Option**: Detailed view of directories and their ignored files
-- **User Control**: Requires explicit "yes" to proceed
+- **User Control**: Requires explicit "yes" to proceed (unless `--force` is used)
+
+### Confirmation Options
+When prompted, you can respond with:
+- **yes/y**: Proceed with deletion
+- **no/n**: Cancel operation
+- **list/l**: Show detailed information about each directory and its ignored files
 
 ### Dry Run Protection
 ```bash
@@ -311,14 +337,16 @@ parent/
 - Safe for testing and verification
 
 ### Comprehensive Logging
-- **Timestamped Logs**: Every operation recorded with timestamp
-- **Error Tracking**: Failed deletions logged with reasons
+- **Timestamped Logs**: Every operation recorded with precise timestamps
+- **Error Tracking**: Failed deletions logged with detailed reasons
 - **Audit Trail**: Complete history of what was changed
+- **Multiple Log Levels**: INFO, WARN, ERROR, SUCCESS, START, END
 
 ### Error Handling
 - **Graceful Failures**: Script continues even if some deletions fail
-- **Permission Checks**: Handles permission-denied scenarios
-- **Path Validation**: Ensures target directories exist
+- **Permission Checks**: Handles permission-denied scenarios properly
+- **Path Validation**: Ensures target directories exist before processing
+- **Iteration Limits**: Prevents infinite loops with MAX_ITERATIONS setting
 
 ### Backup Recommendations
 Before running on important directories:
@@ -331,6 +359,33 @@ tar -czf backup_$(date +%Y%m%d).tar.gz ~/important_folder
 
 # Then run actual cleanup
 ./clean_empty_dirs.sh ~/important_folder
+```
+
+## 📊 Logging
+
+### Log File Location
+- **Default**: Same directory as the target directory
+- **Custom**: Set `LOG_DIRECTORY` in configuration
+- **Fallback**: Script directory if target directory is not writable
+
+### Log File Format
+```
+[2024-01-15 14:30:45] [INFO] Target directory: /Users/username/Downloads
+[2024-01-15 14:30:45] [SUCCESS] Successfully deleted: /Users/username/Downloads/empty1
+[2024-01-15 14:30:45] [ERROR] Failed to delete: /Users/username/Downloads/protected (Permission denied)
+[2024-01-15 14:30:45] [END] Cleanup completed
+```
+
+### Log Levels
+- **START/END**: Script execution boundaries
+- **INFO**: General information and progress
+- **SUCCESS**: Successful operations
+- **WARN**: Warnings and non-critical issues
+- **ERROR**: Failed operations and errors
+
+### Disabling Logging
+```bash
+./clean_empty_dirs.sh --no-log ~/folder
 ```
 
 ## 🐛 Troubleshooting
@@ -349,7 +404,7 @@ sudo ./clean_empty_dirs.sh ~/protected_folder  # If necessary
 ```bash
 # Error: rmdir: directory not empty
 # Cause: Hidden files not in ignore patterns
-# Solution: Add custom ignore patterns
+# Solution: Add custom ignore patterns or use list mode to investigate
 ./clean_empty_dirs.sh -i "*.DS_Store|*.hidden_file" ~/folder
 ```
 
@@ -363,3 +418,76 @@ chmod +x clean_empty_dirs.sh
 #### No Directories Found
 ```bash
 # Issue: Script reports no empty directories but you see some
+# Solution: Check if directories contain files matching ignore patterns
+./clean_empty_dirs.sh --verbose ~/folder
+```
+
+#### Maximum Iterations Reached
+```bash
+# Issue: Script stops after 10 iterations
+# Solution: Increase MAX_ITERATIONS in configuration or investigate why
+# directories keep appearing (possible symbolic links or special files)
+```
+
+#### Log File Creation Failed
+```bash
+# Issue: Cannot create log file in target directory
+# Solution: Script automatically falls back to script directory
+# Or use --no-log to disable logging
+```
+
+### Debug Mode
+For troubleshooting, run with verbose mode:
+```bash
+./clean_empty_dirs.sh -v --dry-run ~/problematic_folder
+```
+
+This will show:
+- Each directory being checked
+- Files found in directories
+- Which files are being ignored
+- Why directories are or aren't considered empty
+
+## 📈 Performance Tips
+
+### For Large Directory Trees
+```bash
+# Limit depth to improve performance
+./clean_empty_dirs.sh -d 5 ~/large_folder
+
+# Use quiet mode to reduce output overhead
+./clean_empty_dirs.sh -q ~/large_folder
+```
+
+### For Automated Scripts
+```bash
+# Use force mode to skip prompts
+./clean_empty_dirs.sh -f -q ~/automated_cleanup
+
+# Disable logging for better performance
+./clean_empty_dirs.sh -f -q --no-log ~/temp_cleanup
+```
+
+### For Network Drives
+```bash
+# Limit recursive iterations to avoid network overhead
+# Edit MAX_ITERATIONS in the script or use single iteration
+./clean_empty_dirs.sh --no-recursive ~/network_drive
+```
+
+## 🔄 Version History
+
+- **v2.0.0**: Current version with full feature set
+  - Added recursive cleanup with iteration limits
+  - Enhanced logging with multiple levels
+  - Improved error handling and user feedback
+  - Added verbose and quiet modes
+  - Better path handling and validation
+
+## 🤝 Contributing
+
+Feel free to submit issues, feature requests, or pull requests to improve this script.
+
+## 📄 License
+
+This script is provided as-is for educational and practical use. Please test thoroughly before using on important data.
